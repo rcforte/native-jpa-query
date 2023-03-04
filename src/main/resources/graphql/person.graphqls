@@ -1,0 +1,12 @@
+# This type defines the person schema.
+type Person {
+    id: ID!
+    firstName: String!
+    lastName: String!
+}
+
+# This type defines the queries available to the person schema.
+type Query {
+    all: [Person!]!
+    byId(id: ID!): Person!
+}

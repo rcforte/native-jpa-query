@@ -1,76 +1,93 @@
 package com.person.service;
 
+
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.graphql.GraphQlTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.graphql.test.tester.GraphQlTester;
 
 import java.util.List;
 import java.util.Optional;
 
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.is;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
-import static org.springframework.http.MediaType.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@ExtendWith(SpringExtension.class)
-@WebMvcTest(PersonController.class)
+@GraphQlTest(PersonController.class)
 class PersonControllerShould {
   @Autowired
-  MockMvc mvc;
+  GraphQlTester client;
+
   @MockBean
   PersonRepository personRepository;
 
   @Test
-  void find_all_persons() throws Exception {
+  public void find_all_persons() {
     given(personRepository.findAll())
-        .willReturn(persons());
-    mvc.perform(
-            get("/person/").contentType(APPLICATION_JSON)
-        )
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$", hasSize(2)))
-        .andExpect(jsonPath("$[0].id", is(1)))
-        .andExpect(jsonPath("$[0].firstName", is("Rafael")))
-        .andExpect(jsonPath("$[0].lastName", is("Forte")));
+        .willReturn(
+            List.of(
+                Person.builder()
+                    .id(1L)
+                    .firstName("Rafael")
+                    .lastName("Forte")
+                    .build(),
+                Person.builder()
+                    .id(2L)
+                    .firstName("Carmen")
+                    .lastName("Forte")
+                    .build()
+            )
+        );
+
+    // language=GraphQL
+    var document = """
+        query {
+          all {
+            id
+            firstName
+            lastName
+          }
+        }
+        """;
+    client.document(document)
+        .execute()
+        .path("all")
+        .entityList(Person.class)
+        .hasSize(2);
   }
 
   @Test
-  void find_person_by_id() throws Exception {
+  public void find_person_by_id() {
     given(personRepository.findById(1L))
-        .willReturn(Optional.of(persons().get(0)));
-    mvc.perform(
-            get("/person/1").contentType(APPLICATION_JSON)
-        )
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id", is(1)))
-        .andExpect(jsonPath("$.firstName", is("Rafael")))
-        .andExpect(jsonPath("$.lastName", is("Forte")));
-  }
+        .willReturn(
+            Optional.of(
+                Person.builder()
+                    .id(1L)
+                    .firstName("Rafael")
+                    .lastName("Forte")
+                    .build()
+            )
+        );
 
-  @Test
-  void find_person_by_id_using_native_query() throws Exception {
-    given(personRepository.foo(1L))
-        .willReturn(persons().get(0));
-    mvc.perform(
-            get("/person/native/1").contentType(APPLICATION_JSON)
-        )
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id", is(1)))
-        .andExpect(jsonPath("$.firstName", is("Rafael")))
-        .andExpect(jsonPath("$.lastName", is("Forte")));
-  }
-
-  private List<Person> persons() {
-    return List.of(
-        new Person(1L, "Rafael", "Forte"),
-        new Person(2L, "Carmen", "Forte")
-    );
+    // language=GraphQL
+    var document = """
+        query byId($id: ID!) {
+          byId(id: $id) {
+            id
+            firstName
+            lastName
+          }
+        }
+        """;
+    client.document(document)
+        .variable("id", 1L)
+        .execute()
+        .path("byId")
+        .entity(Person.class)
+        .satisfies(person -> {
+          assertThat(person.getId()).isEqualTo(1L);
+          assertThat(person.getFirstName()).isEqualTo("Rafael");
+          assertThat(person.getLastName()).isEqualTo("Forte");
+        });
   }
 }
